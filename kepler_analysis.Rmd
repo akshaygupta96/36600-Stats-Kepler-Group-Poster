@@ -12,6 +12,7 @@ suppressMessages(library(dplyr))
 suppressMessages(library(tidyr))
 suppressMessages(library(ggplot2))
 suppressMessages(library(randomForest))
+suppressMessages(library(pROC))
 ```
 
 # Read data 
@@ -73,10 +74,47 @@ TABLE <- list(
   accuracy = c(), 
   precision = c(), 
   recall = c(), 
-  f1 = c()
+  f1 = c(),
+  auc = c(),
+  threshold = c()
 )
 
-get_scores <- function(true, pred){
+common_process <- function(preprocess_data, model_name, probs, best_th=TRUE) {
+  
+  # Calculate the ROC Curve
+  roc_curve <- roc(df.test$label, probs, levels = c(0, 1), direction = "<")
+  plot <- plot_single_roc(roc_curve, model_name = model_name)
+  print(plot)  # Print the ROC plot
+  
+  # Determine optimal threshold if probabilities are provided
+  threshold <- ifelse(best_th, as.numeric(coords(roc_curve, "best", ret = "threshold",  best.method = "youden")), 0.5)
+  preds <- as.numeric(ifelse(probs > threshold, 1, 0))
+  
+  # Calculate scores
+  auc_score <- auc(roc_curve)
+  mcr_score <- mean(preds != df.test$label)  # Calculate MCR
+  
+  # print confusion matrix 
+  print(confusionMatrix(factor(preds), df.test$label))
+  
+  # Add results to MODELS_DATA
+  add_model_results(preprocess_data, model_name, mcr_score, auc_score, threshold)
+}
+
+get_scores <- function(true, prob=NULL, is_prob=TRUE, predictions=NULL, best_th=TRUE){
+  
+  if (is_prob){
+    roc_curve <- roc(true, prob, levels = c(0, 1), direction = "<")
+    threshold <- ifelse(best_th, as.numeric(coords(roc_curve, "best", ret = "threshold",  best.method = "youden")), 0.5)
+    pred <- as.numeric(ifelse(prob > threshold, 1, 0))
+    auc_score <- auc(roc_curve)
+  }
+  else {
+    pred = predictions
+    auc_score = NULL
+    threshold = NULL
+  }
+  
   # Confusion matrix components
   tp <- sum(pred == 1 & true == 1)  # True Positives
   tn <- sum(pred == 0 & true == 0)  # True Negatives
@@ -94,7 +132,8 @@ get_scores <- function(true, pred){
   cat("Precision:", precision, "\n")
   cat("Recall:", recall, "\n")
   cat("F1-score:", f1, "\n")
-  return (c(accuracy, precision, recall, f1))
+  cat("AUC:", auc_score, "\n")
+  return (c(accuracy, precision, recall, f1, auc_score, threshold))
 }
 
 save_scores <- function(model_name, results){
@@ -103,6 +142,8 @@ save_scores <- function(model_name, results){
   TABLE$precision <<- c(TABLE$precision, results[2])
   TABLE$recall <<- c(TABLE$recall, results[3])
   TABLE$f1 <<- c(TABLE$f1, results[4])
+  TABLE$auc <<- c(TABLE$auc, results[5])
+  TABLE$threshold <<- c(TABLE$threshold, results[6])
 }
 
 see <- function(){
@@ -128,8 +169,8 @@ df.test <- df[-s, ]
 lg_model <- glm(label ~ ., data = df.train, family = "binomial")
 
 prob <- as.numeric(predict(lg_model, df.test))
-pred <- ifelse(prob > 0.5, 1, 0)
-results <- get_scores(df.test$label, pred)
+# pred <- ifelse(prob > 0.5, 1, 0)
+results <- get_scores(df.test$label, prob)
 save_scores("Logistic Regression", results)
 ```
 
@@ -141,10 +182,90 @@ set.seed(42)
 rf_model <- randomForest(label ~ ., data = df.train)
 
 prob <- as.numeric(predict(rf_model, df.test, type = "prob")[,2])
-pred <- ifelse(prob > 0.5, 1, 0)
+# pred <- ifelse(prob > 0.5, 1, 0)
+
+results <- get_scores(df.test$label, prob)
+save_scores("Random Forest", results)
+```
+
+## Support Vector Machine (SVM)
+
+```{r}
+library(e1071)
+
+set.seed(42)
+
+df.test <- select(df.test, -koi_eccen)
+df.train <- select(df.train, -koi_eccen)
+
+svm_model <- svm(label ~ ., data = df.train, probability = TRUE)
+
+prob <- attr(predict(svm_model, df.test, probability = TRUE), "probabilities")[,2]
+# pred <- ifelse(prob > 0.5, 1, 0)
+
+results <- get_scores(df.test$label, prob)
+save_scores("Support Vector Machine", results)
+```
+
+
+## K-Nearest Neighbors (KNN)
+
+```{r}
+library(class)
+
+set.seed(42)
+
+# Scale data for KNN
+train_scaled <- scale(select(df.train, -label))
+test_scaled <- scale(select(df.test, -label), center = attr(train_scaled, "scaled:center"), scale = attr(train_scaled, "scaled:scale"))
+
+knn_indices <- knn(train_scaled, test_scaled, cl = df.train$label, k = 5, prob = TRUE)
+prob <- attr(knn_indices, "prob")
+prob <- ifelse(knn_indices == "1", prob, 1 - prob)
 
 results <- get_scores(df.test$label, pred)
-save_scores("Random Forest", results)
+save_scores("K-Nearest Neighbors", results)
+```
+
+
+## Gradient Boosting (GBM)
+
+```{r}
+library(gbm)
+
+set.seed(42)
+
+df.train$label <- as.numeric(df.train$label) - 1
+df.test$label <- as.numeric(df.test$label) - 1
+
+gbm_model <- gbm(label ~ ., data = df.train, distribution = "bernoulli", n.trees = 100, interaction.depth = 3, shrinkage = 0.01, cv.folds = 5)
+
+prob <- predict(gbm_model, df.test, n.trees = gbm_model$n.trees, type = "response")
+# pred <- ifelse(prob > 0.5, 1, 0)
+
+results <- get_scores(df.test$label, prob)
+save_scores("Gradient Boosting", results)
+```
+
+
+## XGBoost
+
+```{r}
+library(xgboost)
+
+set.seed(42)
+
+# Convert data to DMatrix format
+train_matrix <- xgb.DMatrix(data = as.matrix(df.train[,-1]), label = df.train$label)
+test_matrix <- xgb.DMatrix(data = as.matrix(df.test[,-1]), label = df.test$label)
+
+xgb_model <- xgboost(data = train_matrix, max_depth = 6, eta = 0.1, nrounds = 100, objective = "binary:logistic", verbose = 0)
+
+prob <- predict(xgb_model, test_matrix)
+# pred <- ifelse(prob > 0.5, 1, 0)
+
+results <- get_scores(df.test$label, prob)
+save_scores("XGBoost", results)
 ```
 
 
