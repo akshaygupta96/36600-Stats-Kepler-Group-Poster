@@ -13,6 +13,7 @@ suppressMessages(library(tidyr))
 suppressMessages(library(ggplot2))
 suppressMessages(library(randomForest))
 suppressMessages(library(pROC))
+suppressMessages(library(bestglm))
 ```
 
 # Read data 
@@ -79,28 +80,6 @@ TABLE <- list(
   threshold = c()
 )
 
-common_process <- function(preprocess_data, model_name, probs, best_th=TRUE) {
-  
-  # Calculate the ROC Curve
-  roc_curve <- roc(df.test$label, probs, levels = c(0, 1), direction = "<")
-  plot <- plot_single_roc(roc_curve, model_name = model_name)
-  print(plot)  # Print the ROC plot
-  
-  # Determine optimal threshold if probabilities are provided
-  threshold <- ifelse(best_th, as.numeric(coords(roc_curve, "best", ret = "threshold",  best.method = "youden")), 0.5)
-  preds <- as.numeric(ifelse(probs > threshold, 1, 0))
-  
-  # Calculate scores
-  auc_score <- auc(roc_curve)
-  mcr_score <- mean(preds != df.test$label)  # Calculate MCR
-  
-  # print confusion matrix 
-  print(confusionMatrix(factor(preds), df.test$label))
-  
-  # Add results to MODELS_DATA
-  add_model_results(preprocess_data, model_name, mcr_score, auc_score, threshold)
-}
-
 get_scores <- function(true, prob=NULL, is_prob=TRUE, predictions=NULL, best_th=TRUE){
   
   if (is_prob){
@@ -161,7 +140,27 @@ s <- sample(seq_len(nrow(df)), size = as.integer(0.7*nrow(df)))
 df$label <- factor(ifelse(df$label == "CONFIRMED", 1, 0))
 df.train <- df[s, ]
 df.test <- df[-s, ]
+
+df.test <- select(df.test, -koi_eccen)
+df.train <- select(df.train, -koi_eccen)
 ```
+
+## Best Subset Selection
+
+```{r}
+suppressMessages(library(car))
+
+# VIF to find multi-collinearity
+vif(glm(label~., data=df.train, family = "binomial"))
+
+# Dropping highly multi-collinear variables
+df.mod <- df.train %>% select(-koi_srad, -koi_smass, -koi_ror, -koi_dor)
+
+# Both function calls give me infinite loops because there's no convergence. Maybe cos of the skewed predictors or the response not being balanced?
+#bg.aic <- bestglm(df.mod, family = binomial, IC="AIC")
+#bg.bic <- bestglm(df.mod, family = binomial, IC="BIC")
+```
+
 
 ## Logistic Regression
 
@@ -194,9 +193,6 @@ save_scores("Random Forest", results)
 library(e1071)
 
 set.seed(42)
-
-df.test <- select(df.test, -koi_eccen)
-df.train <- select(df.train, -koi_eccen)
 
 svm_model <- svm(label ~ ., data = df.train, probability = TRUE)
 
