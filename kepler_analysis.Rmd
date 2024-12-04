@@ -289,9 +289,9 @@ df.mod <- df.train %>% select(-koi_srad, -koi_smass, -koi_ror, -koi_dor)
 ```{r}
 lg_model <- glm(label ~ ., data = df.train, family = "binomial")
 
-prob <- as.numeric(predict(lg_model, df.test))
+prob_lr <- as.numeric(predict(lg_model, df.test))
 # pred <- ifelse(prob > 0.5, 1, 0)
-results <- get_scores(df.test$label, prob)
+results <- get_scores(df.test$label, prob_lr)
 save_scores("Logistic Regression", results)
 ```
 
@@ -302,10 +302,10 @@ set.seed(42)
 
 rf_model <- randomForest(label ~ ., data = df.train)
 
-prob <- as.numeric(predict(rf_model, df.test, type = "prob")[,2])
+prob_rf <- as.numeric(predict(rf_model, df.test, type = "prob")[,2])
 # pred <- ifelse(prob > 0.5, 1, 0)
 
-results <- get_scores(df.test$label, prob)
+results <- get_scores(df.test$label, prob_rf)
 save_scores("Random Forest", results)
 ```
 
@@ -318,10 +318,10 @@ set.seed(42)
 
 svm_model <- svm(label ~ ., data = df.train, probability = TRUE)
 
-prob <- attr(predict(svm_model, df.test, probability = TRUE), "probabilities")[,2]
+prob_svm <- attr(predict(svm_model, df.test, probability = TRUE), "probabilities")[,2]
 # pred <- ifelse(prob > 0.5, 1, 0)
 
-results <- get_scores(df.test$label, prob)
+results <- get_scores(df.test$label, prob_svm)
 save_scores("Support Vector Machine", results)
 ```
 
@@ -338,10 +338,10 @@ train_scaled <- scale(select(df.train, -label))
 test_scaled <- scale(select(df.test, -label), center = attr(train_scaled, "scaled:center"), scale = attr(train_scaled, "scaled:scale"))
 
 knn_indices <- knn(train_scaled, test_scaled, cl = df.train$label, k = 5, prob = TRUE)
-prob <- attr(knn_indices, "prob")
-prob <- ifelse(knn_indices == "1", prob, 1 - prob)
+prob_knn <- attr(knn_indices, "prob")
+prob_knn <- ifelse(knn_indices == "1", prob_knn, 1 - prob_knn)
 
-results <- get_scores(df.test$label, pred)
+results <- get_scores(df.test$label, prob_knn)
 save_scores("K-Nearest Neighbors", results)
 ```
 
@@ -358,10 +358,10 @@ df.test$label <- as.numeric(df.test$label) - 1
 
 gbm_model <- gbm(label ~ ., data = df.train, distribution = "bernoulli", n.trees = 100, interaction.depth = 3, shrinkage = 0.01, cv.folds = 5)
 
-prob <- predict(gbm_model, df.test, n.trees = gbm_model$n.trees, type = "response")
+prob_gbm <- predict(gbm_model, df.test, n.trees = gbm_model$n.trees, type = "response")
 # pred <- ifelse(prob > 0.5, 1, 0)
 
-results <- get_scores(df.test$label, prob)
+results <- get_scores(df.test$label, prob_gbm)
 save_scores("Gradient Boosting", results)
 ```
 
@@ -379,10 +379,10 @@ test_matrix <- xgb.DMatrix(data = as.matrix(df.test[,-1]), label = df.test$label
 
 xgb_model <- xgboost(data = train_matrix, max_depth = 6, eta = 0.1, nrounds = 100, objective = "binary:logistic", verbose = 0)
 
-prob <- predict(xgb_model, test_matrix)
+prob_xgb <- predict(xgb_model, test_matrix)
 # pred <- ifelse(prob > 0.5, 1, 0)
 
-results <- get_scores(df.test$label, prob)
+results <- get_scores(df.test$label, prob_xgb)
 save_scores("XGBoost", results)
 ```
 
@@ -391,7 +391,56 @@ save_scores("XGBoost", results)
 # Summary of diferent models
 
 ```{r}
-see()
+results <- see()
+print(results)
+```
+
+# Confusion Matrix with the Best Model and MCR
+```{r}
+best_model <- results[which.max(results$auc),]
+print(best_model)
+
+# Youden's J statistic
+best_threshold <- best_model$threshold
+print(paste("Best threshold:", best_threshold))
+
+# Generate predictions based on best threshold
+best_model_pred <- ifelse(prob_xgb > best_threshold, 1, 0)
+
+# Confusion Matrix
+conf_matrix <- table(Predicted = best_model_pred, Actual = df.test$label)
+print("Confusion Matrix")
+print(conf_matrix)
+
+# Misclassification Rate
+mcr <- mean(best_model_pred != df.test$label)
+print(paste("Misclassification Rate (MCR):", mcr))
+
+```
+
+# Overlay ROC curves
+```{r}
+library(pROC)
+
+# Extracting ROC for all models
+lg_roc <- roc(df.test$label, prob_lr)
+rf_roc <- roc(df.test$label, prob_rf)
+svm_roc <- roc(df.test$label, prob_svm)
+knn_roc <- roc(df.test$label, prob_knn) 
+gbm_roc <- roc(df.test$label, prob_gbm)
+xgb_roc <- roc(df.test$label, prob_xgb)
+
+# Plot all ROC curves
+plot(lg_roc, col = "red", main = "ROC Curves for All Models")
+lines(rf_roc, col = "blue")
+lines(svm_roc, col = "green")
+lines(knn_roc, col = "purple")
+lines(gbm_roc, col = "orange")
+lines(xgb_roc, col = "yellow")
+
+legend("bottomright", legend = c("Logistic Regression", "Random Forest", "SVM", "KNN", "Gradient Boosting", "XGBoost"),
+       col = c("red", "blue", "green", "purple", "orange", "yellow"), lty = 1)
+
 ```
 
 
