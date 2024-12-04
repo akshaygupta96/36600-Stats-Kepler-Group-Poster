@@ -1,27 +1,35 @@
 ---
 title: "Kepler Group Poster Project"
 author: "Sashank Yalavarthy, Javier Abollado, Marius Nwobi, Erick Cohen. Alekhya Vittalam, Akshay Gupta"
-date: "2024-11-27"
+date: "2024-12-10"
 output: html_document
 ---
 
-Dataset info: https://exoplanetarchive.ipac.caltech.edu/docs/API_kepcandidate_columns.html
+Our team got the [Keplr Dataset](https://exoplanetarchive.ipac.caltech.edu/docs/API_kepcandidate_columns.html).
 
-```{r setup, include=FALSE}
-suppressMessages(library(dplyr))
-suppressMessages(library(tidyr))
-suppressMessages(library(ggplot2))
-suppressMessages(library(randomForest))
-suppressMessages(library(pROC))
-suppressMessages(library(bestglm))
+```{r setup, include=TRUE}
+# Load necessary libraries
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(randomForest)
+  library(pROC)
+  library(bestglm)
+})
+
+theme_set(theme_light())
+
+# constants
+PATH_TO_KEPLR_DATASET <- "data/kepler.csv"
+RANDOM_SEED <- 101
 ```
 
 # Read data 
 
-
 ```{r}
-set.seed(101)
-df <- read.csv('data/kepler.csv', stringsAsFactors = TRUE)
+set.seed(RANDOM_SEED)
+df <- read.csv(PATH_TO_KEPLR_DATASET, stringsAsFactors = TRUE)
 dim(df)
 summary(df)
 ```
@@ -37,7 +45,8 @@ there are none.
 ## Check data distribution
 
 ```{r}
-df %>% select(-label) %>%
+df %>% 
+  select(-label) %>%
   gather(key = "variable", value = "value") %>%
   ggplot(aes(x = value)) +
   facet_wrap(~ variable, scales = "free") +
@@ -45,8 +54,121 @@ df %>% select(-label) %>%
   labs(title = "Histograms of features")
 ```
 
+# Transform skewed variable [transformation options](https://canvas.cmu.edu/courses/41696/files/11682844?module_item_id=5942604).
+
+Many of the features are skewed in different directions. We will apply transformations to make them more normally distributed.
+
+The following have right skews that we will transform via `1 / log(x)`:
+- koi_depth
+- koi_dor
+- koi_duration
+- koi_impact
+- koi_insol
+- koi_prad
+- koi_ror
+- koi_srad
+- koi_srho
+- koi_teq
+
+The following have right skews that we will transform via `log(x)`
+- koi_period
+
+The following have left skews we will transform via `x^4`
+
+- koi_incl
+- koi_slogg
+
+
 ```{r}
-df %>%
+# create transformation functions
+transform_one_over_log <- function(df, vars) {
+  df %>% 
+    mutate(
+      across(
+        all_of(vars), ~ 1 / log(.) , .names = "{.col}_t"
+        )
+      ) %>% 
+    select(-all_of(vars))
+}
+
+transform_log <- function(df, vars) {
+  df %>% 
+    mutate(
+      across(
+        all_of(vars), ~ log(.), .names = "{.col}_t"
+        )
+      ) %>% 
+    select(-all_of(vars))
+}
+
+transform_fourth_power <- function(df, vars) {
+  df %>% 
+    mutate(
+      across(
+        all_of(vars), ~ (.) ^ 4 , .names = "{.col}_t"
+        )
+      ) %>% 
+    select(-all_of(vars))
+}
+
+# create vector of columns for each transformation
+columns_to_transform_one_over_log <- c(
+  "koi_depth", 
+  "koi_dor",
+  "koi_duration",
+  "koi_impact",
+  "koi_insol",
+  "koi_prad",
+  "koi_ror",
+  "koi_srad",
+  "koi_srho",
+  "koi_teq"
+  )
+
+columns_to_transform_log <- c(
+  "koi_period"
+)
+
+columns_to_transform_fourth_power <- c(
+  "koi_incl",
+  "koi_slogg"
+)
+
+# Apply the transformations
+df_transformed <- 
+  transform_one_over_log(
+    df, 
+    columns_to_transform_one_over_log
+    )
+
+df_transformed <- 
+  transform_fourth_power(
+    df_transformed, 
+    columns_to_transform_fourth_power
+    )
+
+df_transformed <- 
+  transform_log(
+    df_transformed, 
+    columns_to_transform_log
+    )
+
+```
+
+```{r}
+df_transformed %>% 
+  select(-label) %>%
+  gather(key = "variable", value = "value") %>%
+  ggplot(aes(x = value)) +
+  facet_wrap(~ variable, scales = "free") +
+  geom_histogram(bins = 30, color = "black", fill = "skyblue") +
+  labs(title = "Histograms of features")
+```
+
+
+
+```{r}
+df_transformed %>%
   gather(key = "variable", value = "value", -label) %>%
   ggplot(aes(x = label, y = value)) +
   facet_wrap(~ variable, scales = "free") +
