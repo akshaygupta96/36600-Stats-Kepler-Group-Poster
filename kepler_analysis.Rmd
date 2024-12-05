@@ -50,7 +50,7 @@ df %>%
   gather(key = "variable", value = "value") %>%
   ggplot(aes(x = value)) +
   facet_wrap(~ variable, scales = "free") +
-  geom_histogram(bins = 30, color = "black", fill = "skyblue") +
+  geom_histogram(bins = 30, color = "black", fill = "deepskyblue") +
   labs(title = "Histograms of features")
 ```
 
@@ -161,7 +161,7 @@ df %>%
   gather(key = "variable", value = "value") %>%
   ggplot(aes(x = value)) +
   facet_wrap(~ variable, scales = "free") +
-  geom_histogram(bins = 30, color = "black", fill = "skyblue") +
+  geom_histogram(bins = 30, color = "black", fill = "deepskyblue") +
   labs(title = "Histograms of features")
 ```
 
