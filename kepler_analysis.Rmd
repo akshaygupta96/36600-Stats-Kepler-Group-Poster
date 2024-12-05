@@ -85,7 +85,7 @@ transform_one_over_log <- function(df, vars) {
   df %>% 
     mutate(
       across(
-        all_of(vars), ~ 1 / log(.) , .names = "{.col}_t"
+        all_of(vars), ~ 1 / (1+log(.)) , .names = "{.col}_t"
         )
       ) %>% 
     select(-all_of(vars))
@@ -147,7 +147,7 @@ df_transformed <-
     columns_to_transform_fourth_power
     )
 
-df_transformed <- 
+df <- 
   transform_log(
     df_transformed, 
     columns_to_transform_log
@@ -156,7 +156,7 @@ df_transformed <-
 ```
 
 ```{r}
-df_transformed %>% 
+df %>% 
   select(-label) %>%
   gather(key = "variable", value = "value") %>%
   ggplot(aes(x = value)) +
@@ -168,7 +168,7 @@ df_transformed %>%
 
 
 ```{r}
-df_transformed %>%
+df %>%
   gather(key = "variable", value = "value", -label) %>%
   ggplot(aes(x = label, y = value)) +
   facet_wrap(~ variable, scales = "free") +
@@ -271,16 +271,17 @@ df.train <- select(df.train, -koi_eccen)
 
 ```{r}
 suppressMessages(library(car))
-
-# VIF to find multi-collinearity
-vif(glm(label~., data=df.train, family = "binomial"))
-
-# Dropping highly multi-collinear variables
-df.mod <- df.train %>% select(-koi_srad, -koi_smass, -koi_ror, -koi_dor)
-
-# Both function calls give me infinite loops because there's no convergence. Maybe cos of the skewed predictors or the response not being balanced?
-#bg.aic <- bestglm(df.mod, family = binomial, IC="AIC")
+#
+## VIF to find multi-collinearity
+#vif(glm(label~., data=df.train, family = "binomial"))
+#
+## Dropping highly multi-collinear variables
+#df.mod <- df.train %>% select(-koi_srad, -koi_smass, -koi_ror, -koi_dor)
+#
+## Both function calls give me infinite loops because there's no convergence. Maybe cos of the skewed predictors or the response not being balanced?
+#bg.aic <- bestglm(df.train, family = binomial, IC="AIC")
 #bg.bic <- bestglm(df.mod, family = binomial, IC="BIC")
+#bg.aic$BestModel
 ```
 
 
@@ -423,12 +424,12 @@ print(paste("Misclassification Rate (MCR):", mcr))
 library(pROC)
 
 # Extracting ROC for all models
-lg_roc <- roc(df.test$label, prob_lr)
-rf_roc <- roc(df.test$label, prob_rf)
-svm_roc <- roc(df.test$label, prob_svm)
-knn_roc <- roc(df.test$label, prob_knn) 
-gbm_roc <- roc(df.test$label, prob_gbm)
-xgb_roc <- roc(df.test$label, prob_xgb)
+lg_roc <- roc(df.test$label, prob_lr, levels = c(0, 1), direction = "<")
+rf_roc <- roc(df.test$label, prob_rf, levels = c(0, 1), direction = "<")
+svm_roc <- roc(df.test$label, prob_svm, levels = c(0, 1), direction = "<")
+knn_roc <- roc(df.test$label, prob_knn, levels = c(0, 1), direction = "<") 
+gbm_roc <- roc(df.test$label, prob_gbm, levels = c(0, 1), direction = "<")
+xgb_roc <- roc(df.test$label, prob_xgb, levels = c(0, 1), direction = "<")
 
 # Plot all ROC curves
 plot(lg_roc, col = "red", main = "ROC Curves for All Models")
@@ -436,10 +437,10 @@ lines(rf_roc, col = "blue")
 lines(svm_roc, col = "green")
 lines(knn_roc, col = "purple")
 lines(gbm_roc, col = "orange")
-lines(xgb_roc, col = "yellow")
+lines(xgb_roc, col = "black")
 
 legend("bottomright", legend = c("Logistic Regression", "Random Forest", "SVM", "KNN", "Gradient Boosting", "XGBoost"),
-       col = c("red", "blue", "green", "purple", "orange", "yellow"), lty = 1)
+       col = c("red", "blue", "green", "purple", "orange", "black"), lty = 1)
 
 ```
 
