@@ -301,7 +301,7 @@ save_scores("Logistic Regression", results)
 ```{r}
 set.seed(42)
 
-rf_model <- randomForest(label ~ ., data = df.train)
+rf_model <- randomForest(label ~ ., data = df.train, importance=TRUE)
 
 prob_rf <- as.numeric(predict(rf_model, df.test, type = "prob")[,2])
 # pred <- ifelse(prob > 0.5, 1, 0)
@@ -375,8 +375,8 @@ library(xgboost)
 set.seed(42)
 
 # Convert data to DMatrix format
-train_matrix <- xgb.DMatrix(data = as.matrix(select(df.train, -label), label = df.train$label)
-test_matrix <- xgb.DMatrix(data = as.matrix(select(df.train, -label), label = df.test$label)
+train_matrix <- xgb.DMatrix(data = as.matrix(select(df.train, -label)), label = df.train$label)
+test_matrix <- xgb.DMatrix(data = as.matrix(select(df.test, -label)), label = df.test$label)
 
 xgb_model <- xgboost(data = train_matrix, max_depth = 6, eta = 0.1, nrounds = 100, objective = "binary:logistic", verbose = 0)
 
@@ -416,6 +416,15 @@ print(conf_matrix)
 # Misclassification Rate
 mcr <- mean(best_model_pred != df.test$label)
 print(paste("Misclassification Rate (MCR):", mcr))
+
+```
+
+# Variable Importance
+```{r}
+#importance(rf_model)
+varImpPlot(rf_model, 
+           type = 1,  # Mean Decrease Accuracy
+           main = "Variable Importance (Mean Decrease Accuracy)")
 
 ```
 
