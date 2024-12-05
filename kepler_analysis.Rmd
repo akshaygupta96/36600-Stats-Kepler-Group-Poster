@@ -454,7 +454,26 @@ legend("bottomright", legend = c("Logistic Regression", "Random Forest", "SVM", 
 ```
 
 
+```{r fig.width=8}
+# Set up an empty plot with desired xlim and ylim
+plot(1, type = "n", xlim = c(1,0), ylim = c(0, 1), 
+     xlab = "1 - Specificity", ylab = "Sensitivity", 
+     main = "ROC Curves for All Models")
 
+# Plot each ROC curve
+plot(lg_roc, col = "red", add = TRUE)  # add = TRUE overlays the plot
+lines(rf_roc, col = "blue")
+lines(svm_roc, col = "green")
+lines(knn_roc, col = "purple")
+lines(gbm_roc, col = "orange")
+lines(xgb_roc, col = "black")
+
+# Add a legend
+legend("bottomright", legend = c("Logistic Regression", "Random Forest", "SVM", "KNN", "Gradient Boosting", "XGBoost"),
+       col = c("red", "blue", "green", "purple", "orange", "black"), lty = 1)
+
+
+```
 
 
 
