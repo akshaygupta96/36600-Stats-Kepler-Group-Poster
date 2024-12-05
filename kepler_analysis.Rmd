@@ -375,8 +375,8 @@ library(xgboost)
 set.seed(42)
 
 # Convert data to DMatrix format
-train_matrix <- xgb.DMatrix(data = as.matrix(df.train[,-1]), label = df.train$label)
-test_matrix <- xgb.DMatrix(data = as.matrix(df.test[,-1]), label = df.test$label)
+train_matrix <- xgb.DMatrix(data = as.matrix(select(df.train, -label), label = df.train$label)
+test_matrix <- xgb.DMatrix(data = as.matrix(select(df.train, -label), label = df.test$label)
 
 xgb_model <- xgboost(data = train_matrix, max_depth = 6, eta = 0.1, nrounds = 100, objective = "binary:logistic", verbose = 0)
 
@@ -406,7 +406,7 @@ best_threshold <- best_model$threshold
 print(paste("Best threshold:", best_threshold))
 
 # Generate predictions based on best threshold
-best_model_pred <- ifelse(prob_xgb > best_threshold, 1, 0)
+best_model_pred <- ifelse(prob_rf > best_threshold, 1, 0)
 
 # Confusion Matrix
 conf_matrix <- table(Predicted = best_model_pred, Actual = df.test$label)
