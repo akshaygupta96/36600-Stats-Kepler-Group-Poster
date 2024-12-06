@@ -430,8 +430,6 @@ varImpPlot(rf_model,
 
 # Overlay ROC curves
 ```{r}
-library(pROC)
-
 # Extracting ROC for all models
 lg_roc <- roc(df.test$label, prob_lr, levels = c(0, 1), direction = "<")
 rf_roc <- roc(df.test$label, prob_rf, levels = c(0, 1), direction = "<")
