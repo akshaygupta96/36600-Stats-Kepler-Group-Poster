@@ -168,11 +168,21 @@ df %>%
 
 
 ```{r}
-df %>%
+bp <- 
+  df %>%
   gather(key = "variable", value = "value", -label) %>%
   ggplot(aes(x = label, y = value)) +
+  theme(
+    axis.text.x = element_blank(), 
+    axis.ticks.x = element_blank() 
+  ) + 
+  labs(x = "") + 
   facet_wrap(~ variable, scales = "free") +
-  geom_boxplot()
+  geom_boxplot(aes(fill = label))
+
+bp
+
+ggsave("boxplots.png", plot = bp, width = 10, height = 6, dpi = 300)
 ```
 
 **Note:** our data is extremely skewed. 
